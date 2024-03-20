@@ -1,0 +1,92 @@
+/**
+ * This Google Sheet dashboard displays weather data from https://openweathermap.org/api. 
+ * The dashboard uses the 8-day forecast of "One Call API 3.0"
+ * 
+ * Created By: bpwebs.com
+ */
+
+//Constants
+const API_KEY = "9f16a36b9d1b0498a80dc40581a13d51";
+const SHEET_NAME = "WeatherDB";
+const EXCLUDE_PARTS = "current,minutely,hourly,alerts";
+const REQUEST_URL = "https://api.openweathermap.org/data/3.0/onecall?";
+const ICON_URL = "http://openweathermap.org/img/w/";
+const LOCATION_RANGE = "B4:C8";
+const HEADER_RANGE_START = "D3:E3";
+const DATA_RANGE_START = "D4";
+
+
+/**
+ * Main function to get weather data from OpenWeatherMap and update the Google Sheet dashboard.
+ */
+function getWeatherFromOpenWeatherMap() {
+  const dbSheet = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
+  const locations = dbSheet.getRange(LOCATION_RANGE).getValues();
+  let firstIteration = true;
+
+  // Iterate through locations in the spreadsheet
+  for (let i = 0; i < locations.length; i++) {
+    let request = buildApiRequest(locations[i][0], locations[i][1]);
+    let response = fetchWeatherData(request);
+    let data = parseResponse(response);
+    let a = 0;
+
+    const headerRangeStart = dbSheet.getRange(HEADER_RANGE_START);
+    const dataRangeStart = dbSheet.getRange(DATA_RANGE_START);
+
+    // Iterate through the 8-day forecast data
+    for (let j = 0; j < 8; j++) {
+      // If it's the first iteration, set the date in the header
+      if (firstIteration) {
+        let date = new Date(data.daily[j].dt * 1000).toLocaleDateString();
+        headerRangeStart.offset(0, a).merge().setValue(date);
+      }
+      // Extract temperature, description, and icon information
+      let temperature = "Temp.: " + data.daily[j].temp.day + "°C";
+      let description = "Weather: " + data.daily[j].weather[0].description;
+      let icon = data.daily[j].weather[0].icon;
+
+      // Update the spreadsheet with temperature and description
+      dataRangeStart.offset(i, a).setValue(temperature + "\n" + description);
+      // Set the formula to display the weather icon in the spreadsheet
+      dataRangeStart.offset(i, a + 1).setFormula('=IMAGE("' + ICON_URL + icon + '.png",4,75,75)');
+      // Increment the column offset
+      a = a + 2;
+    }
+    firstIteration = false;
+  }
+}
+
+/**
+ * Build the API request URL with the specified latitude and longitude.
+ */
+function buildApiRequest(lat, lon) {
+  let request = REQUEST_URL
+    + "lat=" + lat + "&lon=" + lon
+    + "&exclude=" + EXCLUDE_PARTS
+    + "&units=metric"
+    + "&appid=" + API_KEY;
+  return request;
+}
+
+/**
+ * Fetch weather data from OpenWeatherMap using the provided API request.
+ */
+function fetchWeatherData(request) {
+  try {
+    return UrlFetchApp.fetch(request);
+  } catch (error) {
+    console.error("Error fetching weather data:", error);
+  }
+}
+
+/**
+ * Parse the JSON response from the OpenWeatherMap API.
+ */
+function parseResponse(response) {
+  try {
+    return JSON.parse(response.getContentText());
+  } catch (error) {
+    console.error("Error parsing API response:", error);
+  }
+}
